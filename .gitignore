@@ -1,0 +1,6 @@
+# Ambiente Virtual do Python
+venv/
+__pycache__/
+
+# Ficheiro de variáveis de ambiente (NUNCA ENVIAR!)
+.env
