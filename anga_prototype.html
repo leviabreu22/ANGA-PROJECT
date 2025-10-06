@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANGA - Sua Janela para a Qualidade do Ar</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome (Ícones) -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Leaflet CSS (Mapa) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <style>
+        /* --- PALETA DE CORES PERSONALIZADA E ESTILOS GLOBAIS --- */
+        :root {
+            --color-primary: #2B9D8A;
+            --color-white: #FFFFFF;
+            --color-green: #7FB99F;
+            --color-yellow: #EAAA33;
+            --color-red: #F36C54;
+            --color-background: #F8F9FA;
+            --color-text: #343a40;
+        }
+
+        body { 
+            background-color: var(--color-background); 
+            color: var(--color-text);
+            scroll-behavior: smooth;
+        }
+
+        /* --- COMPONENTES ESTILIZADOS --- */
+        .tab-button.active { 
+            border-bottom-color: var(--color-primary); 
+            color: var(--color-primary); 
+        }
+        .bg-primary { background-color: var(--color-primary); }
+        .text-primary { color: var(--color-primary); }
+        .border-primary { border-color: var(--color-primary); }
+        .hover\:bg-primary-dark:hover { background-color: #248271; }
+        
+        /* Cores do IQA */
+        .iqa-good { background-color: var(--color-green); }
+        .iqa-moderate { background-color: var(--color-yellow); }
+        .iqa-bad { background-color: var(--color-red); }
+        .text-iqa-good { color: #347458; }
+        .text-iqa-moderate { color: #b47f1c; }
+        .text-iqa-bad { color: #c2452e; }
+
+        /* --- ANIMAÇÕES E TRANSIÇÕES --- */
+        .tab-content { 
+            display: none; 
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        .tab-content.active { display: block; }
+
+        .animated-card {
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slideUpFadeIn 0.6s forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUpFadeIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin { 
+            from { transform: rotate(0deg); } 
+            to { transform: rotate(360deg); } 
+        }
+        .spinner { animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body class="font-sans">
+
+    <div class="container mx-auto p-4 max-w-4xl">
+
+        <!-- Cabeçalho -->
+        <header class="text-center mb-6 flex flex-col items-center">
+            <!-- Logo SVG - Você pode substituir por um <img src="sua-logo.svg"> -->
+            <svg class="h-16 w-16 text-primary mb-2" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L2 22h20L12 2zm0 3.84L17.24 20H6.76L12 5.84z"/>
+            </svg>
+            <h1 class="text-5xl font-bold text-primary">ANGA</h1>
+            <p class="text-xl text-gray-500">Sua janela para a qualidade do ar.</p>
+        </header>
+
+        <!-- Navegação por Abas -->
+        <nav id="main-nav" class="flex justify-center border-b-2 border-gray-200 mb-6 bg-white rounded-t-lg shadow-sm">
+            <button data-tab="inicio" class="tab-button active text-lg font-semibold py-3 px-6 border-b-4 border-transparent hover:text-primary transition-colors duration-300">Início</button>
+            <button data-tab="sensores" class="tab-button text-lg font-semibold py-3 px-6 border-b-4 border-transparent hover:text-primary transition-colors duration-300">Sensores</button>
+            <button data-tab="mapa" class="tab-button text-lg font-semibold py-3 px-6 border-b-4 border-transparent hover:text-primary transition-colors duration-300">Mapa</button>
+            <button data-tab="comunidade" class="tab-button text-lg font-semibold py-3 px-6 border-b-4 border-transparent hover:text-primary transition-colors duration-300">Comunidade</button>
+        </nav>
+
+        <!-- Conteúdo Principal -->
+        <main id="main-content">
+            <!-- Tela de Carregamento -->
+            <div id="loading-view" class="text-center p-10">
+                <i class="fas fa-spinner spinner text-primary text-5xl"></i>
+                <p class="mt-4 text-lg">Obtendo sua localização e os dados mais recentes...</p>
+            </div>
+
+            <!-- Conteúdo das Abas -->
+            <div id="tabs-content" class="hidden">
+                <!-- Aba Início -->
+                <div id="tab-inicio" class="tab-content active space-y-6">
+                    <section class="bg-white rounded-xl shadow-lg p-6 animated-card">
+                        <h2 class="text-2xl font-bold text-center mb-4">Painel de Controle: <span id="location-name-inicio" class="text-primary">...</span></h2>
+                        <div class="flex flex-col md:flex-row justify-around items-center text-center">
+                            <div class="mb-6 md:mb-0">
+                                <h3 class="text-lg font-semibold text-gray-600">IQA Atual (OpenAQ)</h3>
+                                <div id="iqa-display-inicio" class="text-white w-32 h-32 rounded-full mx-auto my-3 flex items-center justify-center transition-colors duration-500">
+                                    <span id="iqa-value-inicio" class="text-5xl font-bold">--</span>
+                                </div>
+                                <p id="iqa-level-inicio" class="text-2xl font-medium transition-colors duration-500">Carregando...</p>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-600">Previsão (IA) para 24h</h3>
+                                <div id="iqa-display-forecast" class="text-white w-32 h-32 rounded-full mx-auto my-3 flex items-center justify-center transition-colors duration-500">
+                                    <span id="iqa-value-forecast" class="text-5xl font-bold">--</span>
+                                </div>
+                                <p id="iqa-level-forecast" class="text-2xl font-medium text-gray-500">Calculando...</p>
+                            </div>
+                        </div>
+                    </section>
+                    <section id="alerts-section" class="animated-card bg-white rounded-xl shadow-lg p-6 hidden" style="animation-delay: 150ms;">
+                        <h2 class="text-2xl font-bold text-center mb-4"><i class="fas fa-triangle-exclamation mr-2"></i>Alertas Ativos</h2>
+                        <div id="alerts-container" class="space-y-3"></div>
+                    </section>
+                </div>
+
+                <!-- Aba Sensores -->
+                <div id="tab-sensores" class="tab-content space-y-6"></div>
+
+                <!-- Aba Mapa -->
+                <div id="tab-mapa" class="tab-content">
+                    <section class="bg-white rounded-xl shadow-lg p-2 animated-card">
+                         <div id="map" class="h-[500px] w-full rounded-lg z-0"></div>
+                    </section>
+                </div>
+
+                <!-- Aba Comunidade -->
+                <div id="tab-comunidade" class="tab-content space-y-6">
+                    <section class="bg-white rounded-xl shadow-lg p-6 animated-card">
+                        <h2 class="text-2xl font-bold text-center mb-4 text-primary">Ciência Cidadã ANGA</h2>
+                        <p class="text-center text-gray-600 mb-6">Suas medições ajudam a criar um mapa de qualidade do ar mais detalhado e em tempo real. Participe!</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Medição Diurna -->
+                            <div class="border p-4 rounded-lg bg-yellow-50">
+                                <h3 class="font-semibold text-lg mb-2"><i class="fas fa-sun mr-2 text-yellow-500"></i>Medição Diurna</h3>
+                                <p class="text-sm text-gray-600 mb-4">Aponte sua câmera para o horizonte para estimar a qualidade do ar.</p>
+                                <button id="day-measure-btn" class="w-full bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded-lg transition duration-300">Iniciar Medição</button>
+                            </div>
+                            <!-- Medição Noturna -->
+                            <div class="border p-4 rounded-lg bg-indigo-50">
+                                <h3 class="font-semibold text-lg mb-2"><i class="fas fa-moon mr-2 text-indigo-500"></i>Medição Noturna</h3>
+                                <p class="text-sm text-gray-600 mb-4">Em noites de lua clara, sua câmera pode ajudar a medir a limpidez do céu.</p>
+                                <button id="night-check-btn" class="w-full bg-primary hover:bg-primary-dark text-white font-bold py-2 px-4 rounded-lg transition duration-300">Verificar Condições</button>
+                                <button id="night-measure-btn" class="w-full mt-2 bg-gray-400 text-white font-bold py-2 px-4 rounded-lg cursor-not-allowed transition duration-300" disabled>Iniciar Medição Noturna</button>
+                                <p id="night-status" class="text-center text-sm mt-2 text-gray-600"></p>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="bg-white rounded-xl shadow-lg p-6 animated-card" style="animation-delay: 150ms;">
+                        <h2 class="text-2xl font-bold text-center mb-4">Galeria da Comunidade</h2>
+                        <div id="community-gallery" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+                    </section>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Vista da Câmera -->
+        <section id="camera-view" class="hidden fixed inset-0 bg-black bg-opacity-90 flex flex-col items-center justify-center p-4 z-50">
+            <video id="video-feed" class="w-full max-w-2xl rounded-lg mb-4" playsinline autoplay></video>
+            <div class="w-full max-w-2xl space-y-2">
+                <button id="analyze-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg text-lg">Analisar Imagem</button>
+                <button id="cancel-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg text-lg">Cancelar</button>
+                <p id="camera-error" class="text-red-400 text-sm text-center"></p>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Leaflet JS (Mapa) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            const BACKEND_URL = 'http://127.0.0.1:5000';
+            let map;
+            let userMarker;
+            let searchRadiusCircle;
+            let currentStream = null;
+            let lastKnownIQA = null;
+
+            const loadingView = document.getElementById('loading-view');
+            const tabsContent = document.getElementById('tabs-content');
+            const mainContent = document.getElementById('main-content');
+            const mainNav = document.getElementById('main-nav');
+            const cameraView = document.getElementById('camera-view');
+
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    const tabId = button.dataset.tab;
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                        if (content.id === `tab-${tabId}`) {
+                            content.classList.add('active');
+                        }
+                    });
+                    if (tabId === 'map' && map) {
+                        setTimeout(() => map.invalidateSize(), 100);
+                    }
+                });
+            });
+
+            function updateIQAWidget(prefix, iqa, sourceText) {
+                const iqaValueEl = document.getElementById(`iqa-value-${prefix}`);
+                const iqaLevelEl = document.getElementById(`iqa-level-${prefix}`);
+                const iqaDisplayEl = document.getElementById(`iqa-display-${prefix}`);
+                const sourceEl = document.getElementById(`iqa-source-${prefix}`);
+                
+                if (!iqaValueEl) return;
+
+                iqa = iqa ? parseInt(iqa) : 0;
+                iqaValueEl.textContent = iqa > 0 ? iqa : '--';
+
+                const colorClasses = ['iqa-good', 'iqa-moderate', 'iqa-bad', 'text-iqa-good', 'text-iqa-moderate', 'text-iqa-bad'];
+                iqaDisplayEl.classList.remove(...colorClasses);
+                iqaLevelEl.classList.remove(...colorClasses);
+
+                if (iqa <= 50) {
+                    iqaLevelEl.textContent = 'Bom';
+                    iqaDisplayEl.classList.add('iqa-good');
+                    iqaLevelEl.classList.add('text-iqa-good');
+                } else if (iqa <= 100) {
+                    iqaLevelEl.textContent = 'Moderado';
+                    iqaDisplayEl.classList.add('iqa-moderate');
+                    iqaLevelEl.classList.add('text-iqa-moderate');
+                } else {
+                    iqaLevelEl.textContent = iqa <= 150 ? 'Ruim' : 'Muito Ruim';
+                    iqaDisplayEl.classList.add('iqa-bad');
+                    iqaLevelEl.classList.add('text-iqa-bad');
+                }
+                if (sourceEl) sourceEl.textContent = `Fonte: ${sourceText}`;
+            }
+
+            function renderSensorData(sensors, containerId) {
+                const container = document.getElementById(containerId);
+                container.innerHTML = ''; 
+
+                Object.entries(sensors).forEach(([key, sensorData], index) => {
+                    const pollutants = sensorData.pollutants || {};
+                    const section = document.createElement('section');
+                    section.className = 'bg-white rounded-xl shadow-lg p-6 animated-card';
+                    section.style.animationDelay = `${index * 100}ms`;
+
+                    section.innerHTML = `
+                        <h2 class="text-2xl font-bold text-center mb-4">${sensorData.source.replace(/\(.*\)/, '')}</h2>
+                        <div class="flex justify-center items-center mb-4">
+                             <div class="text-center">
+                                <h3 class="text-lg font-semibold text-gray-600">IQA Equivalente</h3>
+                                <p class="text-4xl font-bold text-primary">${sensorData.iqa || '--'}</p>
+                                <p class="text-sm text-gray-500">${sensorData.source}</p>
+                            </div>
+                        </div>
+                        <h3 class="font-semibold text-lg mb-2 text-center">Detalhes Químicos</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full bg-white">
+                                <thead class="bg-gray-100">
+                                    <tr>
+                                        <th class="py-2 px-4 text-left">Poluente</th>
+                                        <th class="py-2 px-4 text-right">Valor</th>
+                                        <th class="py-2 px-4 text-left">Unidade</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${Object.keys(pollutants).length > 0 ? 
+                                        Object.entries(pollutants).map(([poll, data]) => `
+                                        <tr class="border-t hover:bg-gray-50">
+                                            <td class="py-2 px-4">${poll}</td>
+                                            <td class="py-2 px-4 text-right font-mono">${data.value}</td>
+                                            <td class="py-2 px-4">${data.unit}</td>
+                                        </tr>`).join('') :
+                                        `<tr><td colspan="3" class="text-center py-4 text-gray-500">Nenhum dado químico detalhado disponível.</td></tr>`
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    container.appendChild(section);
+                });
+            }
+
+            function renderAlerts(alerts) {
+                const container = document.getElementById('alerts-container');
+                const section = document.getElementById('alerts-section');
+                if (!alerts || alerts.length === 0) {
+                    section.classList.add('hidden');
+                    return;
+                }
+                container.innerHTML = alerts.map(alert => `
+                    <div class="p-4 rounded-lg ${alert.level === 'danger' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}">
+                        ${alert.message}
+                    </div>
+                `).join('');
+                section.classList.remove('hidden');
+            }
+
+            function renderCommunityData(images) {
+                const gallery = document.getElementById('community-gallery');
+                gallery.innerHTML = images.map(img => `
+                    <div class="relative rounded-lg overflow-hidden shadow-md group">
+                        <img src="${img.url}" class="w-full h-48 object-cover transform group-hover:scale-105 transition-transform duration-300" alt="Imagem da comunidade">
+                        <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-2 text-sm">
+                            IQA Estimado: <span class="font-bold">${img.estimated_iqa}</span>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            function initMap(lat, lon, radiusKm, iqa) {
+                const mapElement = document.getElementById('map');
+                if (map) { 
+                    map.setView([lat, lon], 10);
+                    userMarker.setLatLng([lat, lon]).setPopupContent(`Sua Localização<br><b>IQA Atual: ${iqa || 'N/A'}</b>`);
+                    searchRadiusCircle.setLatLng([lat, lon]).setRadius(radiusKm * 1000);
+                    return;
+                }
+                map = L.map(mapElement).setView([lat, lon], 10);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
+
+                userMarker = L.marker([lat, lon]).addTo(map)
+                    .bindPopup(`Sua Localização<br><b>IQA Atual: ${iqa || 'N/A'}</b>`)
+                    .openPopup();
+                
+                searchRadiusCircle = L.circle([lat, lon], {
+                    color: 'var(--color-primary)',
+                    fillColor: 'var(--color-primary)',
+                    fillOpacity: 0.1,
+                    radius: radiusKm * 1000
+                }).addTo(map);
+            }
+
+            const videoFeed = document.getElementById('video-feed');
+            const cameraErrorEl = document.getElementById('camera-error');
+
+            async function startCamera() {
+                mainContent.style.display = 'none';
+                mainNav.style.display = 'none';
+                cameraView.classList.remove('hidden');
+                cameraErrorEl.textContent = '';
+                
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: 'environment' } 
+                    });
+                    videoFeed.srcObject = currentStream;
+                } catch (error) {
+                    console.error("Erro ao acessar a câmera:", error);
+                    cameraErrorEl.textContent = "Não foi possível acessar a câmera. Verifique as permissões.";
+                }
+            }
+
+            function stopCamera() {
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+                cameraView.classList.add('hidden');
+                mainContent.style.display = 'block';
+                mainNav.style.display = 'flex';
+            }
+
+            async function analyzeImage() {
+                const analyzeBtn = document.getElementById('analyze-btn');
+                analyzeBtn.textContent = "Analisando...";
+                analyzeBtn.disabled = true;
+
+                try {
+                    const response = await fetch(`${BACKEND_URL}/api/analyze-image`, { method: 'POST' });
+                    if (!response.ok) throw new Error('Falha na análise do servidor');
+                    const data = await response.json();
+                    alert(`Análise Concluída!\nIQA Estimado: ${data.iqa}\nFonte: ${data.source}`);
+                } catch (error) {
+                     alert("Erro ao analisar imagem. Tente novamente.");
+                } finally {
+                    stopCamera();
+                    analyzeBtn.textContent = "Analisar Imagem";
+                    analyzeBtn.disabled = false;
+                }
+            }
+            
+            async function checkNightConditions() {
+                const nightStatusEl = document.getElementById('night-status');
+                const nightMeasureBtn = document.getElementById('night-measure-btn');
+                nightStatusEl.textContent = "Verificando...";
+                
+                try {
+                    const response = await fetch(`${BACKEND_URL}/api/night-conditions`);
+                    const data = await response.json();
+                    nightStatusEl.textContent = data.message;
+                    if (data.ideal) {
+                        nightMeasureBtn.disabled = false;
+                        nightMeasureBtn.classList.replace('bg-gray-400', 'bg-primary');
+                        nightMeasureBtn.classList.replace('cursor-not-allowed', 'hover:bg-primary-dark');
+                    } else {
+                        nightMeasureBtn.disabled = true;
+                        nightMeasureBtn.classList.replace('bg-primary', 'bg-gray-400');
+                        nightMeasureBtn.classList.replace('hover:bg-primary-dark', 'cursor-not-allowed');
+                    }
+                } catch (error) {
+                    nightStatusEl.textContent = "Não foi possível conectar ao servidor.";
+                }
+            }
+            
+            async function initializeApp(lat, lon) {
+                try {
+                    const response = await fetch(`${BACKEND_URL}/api/dashboard-data?lat=${lat}&lon=${lon}`);
+                    const data = await response.json();
+
+                    lastKnownIQA = data.sensors.openaq.iqa;
+
+                    document.getElementById('location-name-inicio').textContent = data.location_name;
+                    updateIQAWidget('inicio', data.sensors.openaq.iqa, data.sensors.openaq.source);
+                    updateIQAWidget('forecast', data.forecast.predicted_iqa_24h, 'Previsão IA');
+                    renderAlerts(data.alerts);
+                    renderSensorData(data.sensors, 'tab-sensores');
+                    initMap(lat, lon, data.map_info.search_radius_km, lastKnownIQA);
+
+                    const communityResponse = await fetch(`${BACKEND_URL}/api/community-data`);
+                    const communityData = await communityResponse.json();
+                    renderCommunityData(communityData.images);
+
+                    loadingView.classList.add('hidden');
+                    tabsContent.classList.remove('hidden');
+
+                } catch (error) {
+                    console.error("Erro fatal ao inicializar a aplicação:", error);
+                    loadingView.innerHTML = '<p class="text-red-500">Não foi possível carregar os dados. Verifique se o servidor backend está a correr e tente novamente.</p>';
+                }
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    initializeApp(position.coords.latitude, position.coords.longitude);
+                },
+                (error) => {
+                    console.error("Erro de geolocalização:", error);
+                    initializeApp(-23.55, -46.63); 
+                }
+            );
+
+            document.getElementById('day-measure-btn').addEventListener('click', startCamera);
+            document.getElementById('night-check-btn').addEventListener('click', checkNightConditions);
+            document.getElementById('night-measure-btn').addEventListener('click', startCamera);
+            document.getElementById('analyze-btn').addEventListener('click', analyzeImage);
+            document.getElementById('cancel-btn').addEventListener('click', stopCamera);
+        });
+    </script>
+</body>
+</html>
+
